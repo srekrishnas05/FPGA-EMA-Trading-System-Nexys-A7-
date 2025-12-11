@@ -100,3 +100,95 @@ Now that we have a working EMA calculation, we can move on to identifying crosse
 ~~~
 -- golden cross is when diff_prev </= to 0 and diff_now > 0
 -- death cross is when diff_prev >/= 0 and diff_now < 0
+if (diff_prev <= to_signed(0, diff_prev'length) AND diff_now > to_signed(0, diff_now'length)) then
+            golden_cross <= '1';
+elsif (diff_prev >= to_signed(0, diff_prev'length) AND diff_now < to_signed(0, diff_now'length)) then
+            death_cross <= '1';
+end if;
+~~~
+
+Big part of this is the syntax in comparing. We need the to_signed(0, diff_prev'length) and to_signed(0, diff_now'length) for the FPGA to compile it correctly since it's signed number compared to 0. But we can get the cross detection from this.
+
+Now to generate positions, we need an FSM with states long, flat, short. I included take-profit and stop-loss to ensure that it doesn't run a risk of losing more than it needs to or losing potential gains. The way I set this up was using three integers. Scale_bps was 10000, stop was 150, and take 1as 650. 150/10000 is 1.5% and 650/10000 is 6.5%, decent numbers for take and stop. 
+
+Here is the code to how the logic works behind this. 
+
+~~~
+case state_reg is
+            when flat =>
+                    if (golden_cross = '1') then
+                        state_reg <= long;
+                        buy_reg <= '1';
+                        entry_price_reg <= unsigned(price_sig);
+                    elsif (death_cross = '1') then
+                        state_reg <= short;
+                        sell_reg <= '1';
+                        entry_price_reg <= unsigned(price_sig);                
+                    end if;
+               
+            when long =>
+                    stop_level := (entry_price * (scale_bps - stop_bps)) / scale_bps;
+                    take_level := (entry_price * (scale_bps + take_bps)) / scale_bps;                   
+                    if (current_price <= stop_level) then
+                        state_reg <= flat;
+                        sell_reg <= '1';
+                    elsif (current_price >= take_level) then
+                        state_reg <= flat;
+                        sell_reg <= '1';
+                    elsif (death_cross = '1') then 
+                        state_reg <= flat;
+                        sell_reg <= '1';
+                    end if;
+                
+            when short => 
+                    stop_level := (entry_price * (scale_bps + stop_bps)) / scale_bps;
+                    take_level := (entry_price * (scale_bps - take_bps)) / scale_bps;     
+                    if (current_price >= stop_level) then
+                        state_reg <= flat;
+                        buy_reg <= '1';
+                    elsif (current_price <= take_level) then
+                        state_reg <= flat;
+                        buy_reg <= '1';
+                    elsif (golden_cross = '1') then
+                        state_reg <= flat;
+                        buy_reg <= '1';
+                    end if;
+~~~
+
+The beginning case is flat and when it detects a golden cross it goes to long and if death cross it goes to short. It calculates stop and take based on that price and when price meets either it sells (if long or buys if short). Otherwise if it detects an opposing cross then it switches states to flat and waits for a new cross to shift on to.
+
+## Packet Transmission and Python Analysis
+For my uart_tx file (essentially rx but reversed to sent info back to python) it's a very similar process. However in all the learning I had in this beautiful very high speed integrated circuit hardware description language, I realized I only needed four states: idle, start, data_bits (plural for a reason), and a stop bit. 
+
+~~~
+when data_bits =>
+            tx_reg <= shift_reg(bit_index);
+                if (clk_count = clk_per_bit - 1) then
+                    clk_count <= 0;
+                    if (bit_index = 7) then
+                        state <= stop_bit;
+                    else 
+                        bit_index <= bit_index + 1;
+                    end if;
+                else 
+                    clk_count <= clk_count + 1;
+                end if;
+~~~
+
+
+I can just index the bits and drop it into the corresponding spot in the 8 bit vector.
+
+Finally, in my top module, I just set signals of what I want to see transmitted.
+
+~~~
+trade_byte_reg(0) <= tick_sig;
+trade_byte_reg(1) <= golden_sig;
+trade_byte_reg(2) <= death_sig;
+trade_byte_reg(3) <= pos_long_sig;
+trade_byte_reg(4) <= pos_short_sig;
+trade_byte_reg(5) <= ema_slow_valid_sig;
+trade_byte_reg(6) <= ema_fast_valid_sig;
+trade_byte_reg(7) <= '0';
+~~~
+
+Essentially these are the signals I'm sending to python. I had my previous code in python set up to display these signals at each timestamp and price in the csv to debug to make sure trades were being executed, but now I have it setup to just run through the csv, make a 
