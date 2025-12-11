@@ -4,7 +4,8 @@ By Sre krishna Subrahamanian
 This was my final project for CPE 487 DSD taught by Professor Yett! I'm using this github repo as a method of being able to show off how the system actually runs (from pyserial to the fpga and back to python) along with being able to submit it for credit 😁.
 
 ## Demonstration
-https://youtu.be/pj5wCKJ1094 
+[![Demonstration](https://img.youtube.com/vi/pj5wCKJ1094/maxresdefault.jpg)](https://youtu.be/pj5wCKJ1094)
+[![Trade List](https://img.youtube.com/vi/LAT48-Oe1BA/maxresdefault.jpg)](https://youtu.be/LAT48-Oe1BA)
 
 ## Table of Contents
 - System Architecture and Overview
@@ -34,9 +35,8 @@ When the stock is in a flat position, neither short nor long, the FPGA continues
 that it detects.
 
 Finally once the stock has had a buy or sell signal generated, the FPGA is responsible to return this info back to python. Using UART, the FPGA sends back info to python in which some code compiles the results (both in real-time every 1000 timestamped stock changes and at the end 
-to show cumulative results) all through command prompt. 
+to show cumulative results) all through command prompt. Here's a diagram of what the whole system looks like start to finish. 
 
-Here's a diagram of what the whole system looks like start to finish. 
 <img width="456" height="376" alt="image" src="https://github.com/user-attachments/assets/6b1bd382-dd9c-4f96-ab5f-0ab348528b63" />
 
 ## UART and PySerial / FPGA Packet Retrieval and Assembly
@@ -95,4 +95,8 @@ if (tick_sig = '1') then
 Diff is Pn - EMAn-1. Delta is dividing that by 16 (16 since 2^4 and this is ema_slow). New EMA is just the old EMA + delta. 
 
 ## Buy/Sell Signal and Long/Short/Flat Position Generator
-Now that we have a working EMA calculation, we can move on to identifying crosses. 
+Now that we have a working EMA calculation, we can move on to identifying crosses. The way I chose to do this is within another module and setting up a signal diff_prev and variable (better than signal since it updates immediately) diff_now. diff_now is set as ema fast - ema slow and diff now's value gets passed on to diff prev. Let's talk about why using a variable is super crucial here. Variables update their value the second a statement is asserted while a signal updates at the end of the clock cycle. By using this setup of one variable and one signal, within one clock cycle we can use the diff now value and diff prev value. 
+
+~~~
+-- golden cross is when diff_prev </= to 0 and diff_now > 0
+-- death cross is when diff_prev >/= 0 and diff_now < 0
