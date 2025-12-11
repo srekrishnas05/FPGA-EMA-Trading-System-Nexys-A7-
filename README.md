@@ -1,7 +1,7 @@
 # FPGA Trading System
 By Sre krishna Subrahamanian
 
-This was my final project for CPE 487 DSD taught by Professor Yett! I'm using this github repo as a method of being able to show off how the system actually runs (from pyserial to the fpga and back to python) along with being able to submit it for credit 😁.
+This started as a passion project and it was my final project for CPE 487 DSD taught by Professor Yett! I'm using this github repo as a method of being able to show off how the system actually runs (from pyserial to the fpga and back to python) along with being able to submit it for credit 😁.
 
 ## Demonstration
 [![Demonstration](https://img.youtube.com/vi/pj5wCKJ1094/maxresdefault.jpg)](https://youtu.be/pj5wCKJ1094)
